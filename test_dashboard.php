@@ -1,6 +1,6 @@
 <?php
 // 1. KẾT NỐI DATABASE
-$conn = new mysqli("localhost", "root", "", "web_xem_phim");
+$conn = new mysqli("localhost", "root", "", "movie_booking");
 $conn->set_charset("utf8mb4");
 
 // 2. TRUY VẤN 4 CHỈ SỐ KPI TÀI CHÍNH

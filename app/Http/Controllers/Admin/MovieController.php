@@ -8,37 +8,52 @@ use Illuminate\Http\Request;
 
 class MovieController extends Controller
 {
-    // Liệt kê danh sách phim
-    public function index()
+    // Hiển thị danh sách phim kèm tìm kiếm
+    public function index(Request $request)
     {
-        $movies = Movie::latest('id')->get();
-        return view('admin.movies.index', compact('movies'));
+        $keyword = $request->input('q');
+
+        $movies = Movie::query()
+            ->when($keyword, function ($query, $keyword) {
+                $query->where('title', 'like', "%{$keyword}%")
+                      ->orWhere('genre', 'like', "%{$keyword}%");
+            })
+            ->latest('id')
+            ->paginate(10)
+            ->withQueryString();
+
+        return view('admin.movies.index', compact('movies', 'keyword'));
     }
 
-    //Kiểm tra tên phim khi rời chuột (.blur)
-    public function kiemTraTenPhim(Request $request)
+    // Kiểm tra tên phim qua Ajax khi rời chuột (.blur)
+    public function checkName(Request $request)
     {
-        $tenphim = trim($request->input('tenphim', ''));
-        $phim = Movie::where('title', $tenphim)->first();
+        $title = trim($request->input('tenphim', ''));
+        $exists = Movie::where('title', $title)->exists();
 
-        if ($phim) {
-            return "<span style='color: red;'><i class='bi bi-x-circle'></i> Tên phim này đã tồn tại trong CSDL!</span>";
-        } else {
-            return "<span style='color: green;'><i class='bi bi-check-circle'></i> Tên phim hợp lệ, có thể thêm!</span>";
+        if ($exists) {
+            return "<span class='text-danger'><i class='bi bi-x-circle'></i> Tên phim này đã tồn tại trong CSDL!</span>";
         }
+        return "<span class='text-success'><i class='bi bi-check-circle'></i> Tên phim hợp lệ, có thể thêm!</span>";
     }
 
-    //Thêm phim mới vào database
-    public function themPhimAjax(Request $request)
+    // Thêm phim qua Ajax
+    public function storeAjax(Request $request)
     {
-        $movie = Movie::create([
-            'title'        => $request->input('title'),
-            'genre'        => $request->input('genre'),
-            'duration'     => $request->input('duration'),
-            'release_date' => $request->input('release_date'),
-            'description'  => $request->input('description', ''),
-            'is_active'    => 1
+        $data = $request->validate([
+            'title'        => 'required|string|max:255',
+            'genre'        => 'required|string|max:100',
+            'duration'     => 'required|integer|min:1',
+            'release_date' => 'required|date',
+            'status'       => 'nullable|string',
+            'description'  => 'nullable|string',
         ]);
+
+        if (empty($data['status'])) {
+            $data['status'] = 'showing';
+        }
+
+        $movie = Movie::create($data);
 
         return response()->json([
             'status' => 'success',
@@ -46,13 +61,20 @@ class MovieController extends Controller
         ]);
     }
 
-    // Xóa phim
-    public function xoaPhim($id)
+    // Đổi trạng thái nhanh
+    public function quickStatus(Request $request)
     {
-        $movie = Movie::find($id);
-        if ($movie) {
-            $movie->delete();
-        }
+        $movie = Movie::findOrFail($request->id);
+        $movie->update(['status' => $request->status]);
+
+        return response()->json(['status' => 'success']);
+    }
+
+    // Xóa phim
+    public function destroy(Movie $movie)
+    {
+        $movie->delete();
+
         return redirect()->route('admin.movies.index')->with('success', 'Đã xóa phim thành công!');
     }
 }
